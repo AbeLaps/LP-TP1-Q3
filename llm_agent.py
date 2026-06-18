@@ -59,18 +59,7 @@ class LLMAgent(BaseAgent):
 
         
 
-        # lengths = [len(song.get("lyrics", "")) for song in self.hand]
-        # ordered = sorted(lengths)
-        # median = ordered[len(ordered) // 2]
-
-        # best_idx = 0
-        # best_dist = abs(lengths[0] - median)
-        # for i in range(1, len(self.hand)):
-        #     dist = abs(lengths[i] - median)
-        #     if dist < best_dist:
-        #         best_idx = i
-        #         best_dist = dist
-
+        chosen_idx = self._sanitize_card_choice(raw)
         return {"chosen_card": self.hand[chosen_idx]}
 
     @tool()
@@ -82,9 +71,9 @@ class LLMAgent(BaseAgent):
             "Você é um jogador em um jogo de associação entre dicas e músicas\n"
             "Você receberá o início e o final de uma letra de uma música separadas pelo separador '$$$', "
             "utilize ela para gerar um dica para a música"
-            "Para a dica priorize utilizar o final da música de forma a conter também o início"
+            "Para a dica priorize utilizar o final da música de forma a conter também o início parcialmente"
             "Você deve maximixar a qualidade da dica para que a música possa ser adivinhada apenas pela dica"
-            "Evite ao máximo utilizar qualquer palavra da letra da música"
+            "Evite ao máximo utilizar qualquer palavra da letra ou trecho exato da música"
             f"Use no maximo {max_words} palavras.\n"
             "Você deve gerar uma explicação para a dica que vai dar como resposta e apenas no final escrever a"
             " dica real com o indicador Dica: <<<Sua dica>>> \n\n"
@@ -93,7 +82,7 @@ class LLMAgent(BaseAgent):
 
         raw = await self.llm_generate(
             prompt,
-            max_tokens=200,
+            max_tokens=400,
             temperature=0.3,
             stop=["\n\n", "\nResposta:", "\nAnswer:", "###"],
         )
