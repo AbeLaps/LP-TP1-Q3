@@ -64,26 +64,26 @@ class LLMAgent(BaseAgent):
     @tool()
     async def send_clue(self, lyrics: str, max_words: int = 6) -> Dict[str, Any]:
         # Prompt alterado, teste com reason antes da dica final
-        short_lyrics = " ".join(lyrics.split()[:100]) + "$$$" + " ".join(lyrics.split()[-30:])
+        short_lyrics = " ".join(lyrics.split()[:300])
 
         prompt = (
             "Você é um jogador em um jogo de associação entre dicas e músicas\n"
-            "Você receberá o início e o final de uma letra de uma música separadas pelo separador '$$$', "
-            "utilize ela para gerar um dica para a música"
+            "Você receberá um trecho de uma música utilize ele para gerar um dica para a música poder ser adivinhada com facilidade"
             "Para a dica priorize utilizar o final da música de forma a conter também o início parcialmente"
             "Você deve maximixar a qualidade da dica para que a música possa ser adivinhada apenas pela dica"
-            "Evite ao máximo utilizar qualquer palavra da letra ou trecho exato da música"
+            "Não é permitido utilizar todas as palavra da letra ou trecho exato da música utilize sinônimos simples ou apenas 2 palavras no máximo, da letra da música "
+            "que possam ser adivinhados de forma fácil por outras pessoas"
             f"Use no maximo {max_words} palavras.\n"
-            "A dica não precisa e é recomendado não ser uma frase correta, é ideal que seja apenas palavras chaves soltas"
-            "Você deve gerar uma explicação curta para a dica que vai dar como resposta e apenas no final escrever a"
-            " dica real com o indicador Dica: <<<Sua dica>>> \n\n"
+            "A dica não precisa e é recomendado não ser uma frase coesa, é ideal que seja apenas palavras chaves soltas quando essa for uma boa dica"
+            "A sua saída deve seguir o seguinte formato:"
+            "Dica: <<<Sua dica>>> \n\n"
             f"Letra:\n{short_lyrics}\n\n"
         )
 
         raw = await self.llm_generate(
             prompt,
-            max_tokens=2000,
-            temperature=0.3,
+            max_tokens=200,
+            temperature=0.6,
             stop=["\n\n", "\nResposta:", "\nAnswer:", "###"],
         )
 
@@ -103,12 +103,23 @@ class LLMAgent(BaseAgent):
         clue_words = self._normalize_words(clue)
         clean_clue = [x for x in clue_words]
 
+        # Heurística: se alguma carta tiver >=3 palavras exatas da dica na letra,
+        # escolhe a de maior pontuação sem chamar a LLM.
+        best_score, best_idx = 0, -1
+        for idx, card in enumerate(self.hand):
+            lyrics_words = self._normalize_words(card.get("lyrics", ""))
+            score = len(clue_words.intersection(lyrics_words))
+            if score > best_score:
+                best_score, best_idx = score, idx
+        if best_score >= 3:
+            return {"chosen_card": self.hand[best_idx]}
+
         prompt = (
             "Você é um jogador em um jogo de associação entre dicas e músicas\n"
             "Você receberá uma dica e uma lista de músicas contendo titulo:letra"
             "escolha a música mais compatível com dica"
             "A lista deve utilizar os títulos como forma de identificação"
-            "Justifique as 2 primeiras posições e apenas no final da sua resposta coloque a lista"
+            "Justifique as 2 primeiras posições com no máximo 30 palavras e apenas no final da sua resposta coloque a lista"
             "Você deve responder exatamente da seguinte forma, contendo apenas e exatamente uma lista nesse formato sem qualquer outro marcador markdown exceto pela explicação:"
             "response: [lista de títulos ordenados de acordo com a compatibilidade com a dica]"
             f"Dica:\n{clean_clue}\n\n"
@@ -117,8 +128,8 @@ class LLMAgent(BaseAgent):
 
         raw = await self.llm_generate(
             prompt,
-            max_tokens=2000,
-            temperature=0.3,
+            max_tokens=1000,
+            temperature=0.2,
             stop=["\n\n", "\nResposta:", "\nAnswer:", "###"],
         )
 
