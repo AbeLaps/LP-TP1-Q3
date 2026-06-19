@@ -8,3 +8,4 @@ logs_tournament/
 *.gguf
 .env
 .DS_Store
+.vscode/
