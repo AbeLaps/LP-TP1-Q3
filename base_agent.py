@@ -273,6 +273,30 @@ class BaseAgent:
 
         return clue
     
+    @staticmethod
+    def sanitize_votes(raw: str, n_options: int = 5) -> List[int]:
+        """Extrai índices de voto (base 0) da resposta da LLM.
+
+        Formato esperado: response: [1, 3]  (base 1)
+        Retorna lista de índices base-0 sem duplicatas, ou lista vazia se não
+        for possível parsear — o fallback heurístico em vote() cobre esse caso.
+        """
+        match = re.search(r'response\s*:\s*\[([^\]]+)\]', raw, re.IGNORECASE)
+        if not match:
+            match = re.search(r'\[([^\]]+)\]', raw)
+        if not match:
+            return []
+
+        indices: List[int] = []
+        for part in match.group(1).split(','):
+            num = re.search(r'\d+', part)
+            if num:
+                idx = int(num.group()) - 1
+                if 0 <= idx < n_options and idx not in indices:
+                    indices.append(idx)
+        return indices
+    
+    
     def _parse_song_choice(self, response: str, n_options: int) -> int | None:
         nums = [int(x) for x in re.findall(r"\d+", response)]
         for n in nums:

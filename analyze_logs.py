@@ -44,10 +44,14 @@ def analyze(logs: List[Dict[str, Any]]) -> Dict[str, Any]:
     alias_vote_misses: Dict[str, int] = {}
     alias_total_points: Dict[str, float] = {}
     alias_point_slots: Dict[str, int] = {}
+    alias_narrator_points: Dict[str, float] = {}
+    alias_narrator_slots: Dict[str, int] = {}
 
     def ensure(alias: str, atype: str) -> None:
         alias_type[alias] = atype
-        for d in (alias_wins, alias_vote_hits, alias_vote_misses, alias_total_points, alias_point_slots):
+        for d in (alias_wins, alias_vote_hits, alias_vote_misses,
+                  alias_total_points, alias_point_slots,
+                  alias_narrator_points, alias_narrator_slots):
             d.setdefault(alias, 0)
 
     for game in logs:
@@ -78,6 +82,9 @@ def analyze(logs: List[Dict[str, Any]]) -> Dict[str, Any]:
                     alias_point_slots[alias] += 1
 
                 if agent_id == narrador_id:
+                    if agent_id < len(scores):
+                        alias_narrator_points[alias] += scores[agent_id]
+                        alias_narrator_slots[alias] += 1
                     continue
 
                 if narrador_option in vote_info.get("voted_options", []):
@@ -102,6 +109,8 @@ def analyze(logs: List[Dict[str, Any]]) -> Dict[str, Any]:
         hit_rate = alias_vote_hits[alias] / votes if votes else 0
         slots = alias_point_slots[alias]
         avg_pts = alias_total_points[alias] / slots if slots else 0
+        narrator_slots = alias_narrator_slots[alias]
+        avg_pts_as_narrator = alias_narrator_points[alias] / narrator_slots if narrator_slots else 0
         by_alias[alias] = {
             "type": alias_type.get(alias, "unknown"),
             "games_won": alias_wins.get(alias, 0),
@@ -110,6 +119,7 @@ def analyze(logs: List[Dict[str, Any]]) -> Dict[str, Any]:
             "vote_misses": alias_vote_misses.get(alias, 0),
             "hit_rate": round(hit_rate, 4),
             "avg_points_per_round": round(avg_pts, 4),
+            "avg_points_as_narrator": round(avg_pts_as_narrator, 4),
         }
 
     return {
@@ -161,6 +171,7 @@ def print_results(results: Dict[str, Any], log_names: List[str]) -> None:
         print(f"    Erros de voto     : {stats['vote_misses']}")
         print(f"    Hit rate          : {stats['hit_rate'] * 100:.1f}%")
         print(f"    Media pts/rodada  : {stats['avg_points_per_round']:.2f}")
+        print(f"    Media pts/narrador: {stats['avg_points_as_narrator']:.2f}")
         print()
 
     print(SEP)

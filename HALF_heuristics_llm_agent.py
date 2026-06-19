@@ -17,7 +17,6 @@ Características:
 
 import argparse
 import re
-import random
 from typing import Any, Dict, List
 
 from base_agent import BaseAgent
@@ -127,25 +126,25 @@ class LLMAgent(BaseAgent):
 
     @tool()
     async def vote(self, clue: str, options: List[Dict[str, Any]], my_chosen_card: Dict[str, Any]) -> Dict[str, Any]:
-        
+
         clue_words = self._normalize_words(clue)
         clean_clue = [x for x in clue_words]
 
-        # retirar a chosen card das opções
-        options = [n for n in options if n['id'] != my_chosen_card.get('id')] 
-        options_str = "\n".join(f"{idx+1}. {option.get('title', '')}: {option.get('lyrics', '')}" for idx, option in enumerate(options))
+        # retirar a chosen card das opções para o prompt da LLM
+        other_options = [n for n in options if n['id'] != my_chosen_card.get('id')]
+        options_str = "\n".join(f"{idx+1}. {option.get('title', '')}: {option.get('lyrics', '')}" for idx, option in enumerate(other_options))
 
         prompt = (
             "Você é um jogador em um jogo de associação entre dicas e músicas\n"
-            "Você receberá um dica e 5 cartas que contém títulos e letras de músicas"
-            "você deve verificar cada música e escolher as duas que são mais prováveis de terem originado essa dica"
-            "As músicas estão no formato título:letra e estão numeradas de 1 a 5, utilize esses números para" 
+            "Você receberá uma dica e 5 cartas que contém títulos e letras de músicas"
+            "você deve verificar cada música e escolher a música mais provável de ter originado essa dica"
+            "As músicas estão no formato título:letra e estão numeradas de 0 a 4, utilize esses números para"
             "escolher as cartas."
             f"Dica:\n{clean_clue}\n\n"
             f"Lista de músicas com suas letras: {options_str}\n\n"
-            "Utilize o primeiro voto de forma criativa e o segundo de forma mais segura"
+            "Utilize o seu voto de forma criativa porém com confiabilidade"
             "Responda exatamente da seguinte forma sem qualquer outro marcador markdown ou explicação a mais:"
-            "response: [número da primeira escolha, número da segunda escolha]"
+            "response: [número da música escolhida]"
         )
 
         raw = await self.llm_generate(
@@ -155,15 +154,42 @@ class LLMAgent(BaseAgent):
             stop=["\n\n", "\nResposta:", "\nAnswer:", "###"],
         )
 
-        clean_votes = self.sanitize_votes(raw)
+        # índices da LLM são relativos a other_options; mapeia de volta para options original
+        other_to_orig = {fi: next(oi for oi, opt in enumerate(options) if opt['id'] == card['id'])
+                         for fi, card in enumerate(other_options)}
+        llm_votes_filtered = self.sanitize_votes(raw, n_options=len(other_options))
+        clean_votes = [other_to_orig[i] for i in llm_votes_filtered if i in other_to_orig]
+
+        # Heuristica sobre a lista original, excluindo a própria carta
+        my_idx = next((i for i, opt in enumerate(options) if opt["id"] == my_chosen_card["id"]), -1)
+
+        scored: List[tuple[int, int]] = []
+        for idx, option in enumerate(options):
+            if idx == my_idx:
+                continue
+            title_words = self._normalize_words(option.get("title", ""))
+            score = len(clue_words.intersection(title_words))
+            scored.append((score, idx))
+
+        scored.sort(reverse=True)
+
+        heuristic_votes: List[int] = []
+        for _, idx in scored:
+            if idx not in heuristic_votes:
+                heuristic_votes.append(idx)
+            if len(heuristic_votes) >= 1:
+                break
+
+        if heuristic_votes:
+            clean_votes.insert(0, heuristic_votes[0])
 
         # fallback com voto aleatório
         if len(clean_votes) < 2:
-            for _ in range(len(options)-1):
+            for idx in range(len(options)):
+                if idx != my_idx and idx not in clean_votes:
+                    clean_votes.append(idx)
                 if len(clean_votes) >= 2:
                     break
-                else:
-                    clean_votes.append(random.randint(0, len(options) - 1))
 
         return {"votes": clean_votes[:2]}
 

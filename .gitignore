@@ -9,3 +9,4 @@ logs_tournament/
 .env
 .DS_Store
 .vscode/
+results/
