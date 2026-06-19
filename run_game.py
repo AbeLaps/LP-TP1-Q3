@@ -118,9 +118,9 @@ async def main() -> None:
             ]
         else:
             agent_specs = [
-                ("llm_agent.py", args.base_port, "LLMAgent", "strategic"),
-                ("random_agent.py", args.base_port + 1, "RandomAgent", "random"),
-                ("random_agent.py", args.base_port + 2, "RandomAgent", "random"),
+                ("BASE_llm_agent.py", args.base_port, "BASE_LLMAgent", "strategic"),
+                ("FULL_LLM_v1_llm_agent.py", args.base_port + 1, "FULL_LLM_v1_agent", "strategic"),
+                ("BASE_llm_agent.py", args.base_port + 2, "RandomAgent", "random"),
                 ("random_agent.py", args.base_port + 3, "RandomAgent", "random"),
                 ("random_agent.py", args.base_port + 4, "RandomAgent", "random"),
                 ("random_agent.py", args.base_port + 5, "RandomAgent", "random"),

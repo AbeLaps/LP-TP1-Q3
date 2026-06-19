@@ -20,6 +20,7 @@ import traceback
 from collections import Counter
 from typing import Any, Dict, List, Sequence
 
+import random
 import aiohttp
 
 LOGGER = logging.getLogger(__name__)
@@ -163,6 +164,56 @@ class BaseAgent:
             return False
 
         return clue_norm in lyrics_norm
+    
+    def _extract_clue_from_response(self, raw: str) -> str:
+        """Extrai somente o texto após o indicador 'Dica:' na resposta da LLM.
+
+        Formatos aceitos (em ordem de prioridade):
+          1. Dica: <<<texto>>>   — extrai apenas o conteúdo entre <<< e >>>
+          2. Dica: texto         — extrai tudo após 'Dica:' até o fim da linha
+        Fallback: retorna o raw completo.
+        """
+        match = re.search(r'[Dd]ica\s*:\s*<<<(.+?)>>>', raw)
+        if match:
+            return match.group(1).strip()
+
+        match = re.search(r'[Dd]ica\s*:\s*(.+)', raw)
+        if match:
+            return match.group(1).strip()
+
+        return raw.strip()
+
+    def _sanitize_card_choice(self, raw: str) -> int:
+        """Extrai a lista `response: [título1, título2, ...]` da resposta da LLM
+        e retorna o índice em self.hand do título mais bem ranqueado."""
+        match = re.search(r'response\s*:\s*\[([^\]]+)\]', raw, re.IGNORECASE)
+        if not match:
+            match = re.search(r'\[([^\]]+)\]', raw)
+
+        if match:
+            raw_items = match.group(1).split(',')
+            items = [item.strip().strip("\"'") for item in raw_items if item.strip()]
+
+            # 1ª passagem: match exato por palavras normalizadas
+            for item in items:
+                item_words = self._normalize_words(item)
+                if not item_words:
+                    continue
+                for idx, song in enumerate(self.hand):
+                    if item_words == self._normalize_words(song.get("title", "")):
+                        return idx
+
+            # 2ª passagem: match parcial (um conjunto é subconjunto do outro)
+            for item in items:
+                item_words = self._normalize_words(item)
+                if not item_words:
+                    continue
+                for idx, song in enumerate(self.hand):
+                    title_words = self._normalize_words(song.get("title", ""))
+                    if item_words <= title_words or title_words <= item_words:
+                        return idx
+
+        return random.randrange(len(self.hand))
     
     def _sanitize_clue(self, clue: str, max_words: int, lyrics: str) -> str:
         ''' Estas sanitizacoes foram baseadas na minha experiencia com a Phi3.5
