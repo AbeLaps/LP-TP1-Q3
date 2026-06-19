@@ -56,7 +56,6 @@ class LLMAgent(BaseAgent):
             stop=["\n\n", "\nResposta:", "\nAnswer:", "###"],
         )
 
-        
 
         chosen_idx = self._sanitize_card_choice(raw)
         return {"chosen_card": self.hand[chosen_idx]}
@@ -69,7 +68,6 @@ class LLMAgent(BaseAgent):
         prompt = (
             "Você é um jogador em um jogo de associação entre dicas e músicas\n"
             "Você receberá um trecho de uma música utilize ele para gerar um dica para a música poder ser adivinhada com facilidade"
-            "Para a dica priorize utilizar o final da música de forma a conter também o início parcialmente"
             "Você deve maximixar a qualidade da dica para que a música possa ser adivinhada apenas pela dica"
             "Não é permitido utilizar todas as palavra da letra ou trecho exato da música utilize sinônimos simples ou apenas 2 palavras no máximo, da letra da música "
             "que possam ser adivinhados de forma fácil por outras pessoas"

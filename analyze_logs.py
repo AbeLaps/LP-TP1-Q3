@@ -46,12 +46,15 @@ def analyze(logs: List[Dict[str, Any]]) -> Dict[str, Any]:
     alias_point_slots: Dict[str, int] = {}
     alias_narrator_points: Dict[str, float] = {}
     alias_narrator_slots: Dict[str, int] = {}
+    alias_narrator_full_hits: Dict[str, int] = {}   # todos acertaram → 0 pts
+    alias_narrator_full_misses: Dict[str, int] = {} # ninguém acertou → 0 pts
 
     def ensure(alias: str, atype: str) -> None:
         alias_type[alias] = atype
         for d in (alias_wins, alias_vote_hits, alias_vote_misses,
                   alias_total_points, alias_point_slots,
-                  alias_narrator_points, alias_narrator_slots):
+                  alias_narrator_points, alias_narrator_slots,
+                  alias_narrator_full_hits, alias_narrator_full_misses):
             d.setdefault(alias, 0)
 
     for game in logs:
@@ -92,6 +95,23 @@ def analyze(logs: List[Dict[str, Any]]) -> Dict[str, Any]:
                 else:
                     alias_vote_misses[alias] += 1
 
+            # Detecta full acerto / full erro do narrador nesta rodada
+            non_narrator_votes = [
+                v for v in rnd.get("votes_by_agent", [])
+                if int(v["agent"]) != narrador_id
+            ]
+            total_voters = len(non_narrator_votes)
+            hits_count = sum(
+                1 for v in non_narrator_votes
+                if narrador_option in v.get("voted_options", [])
+            )
+            narrador_alias = agent_alias(agents[narrador_id]["name"])
+            if total_voters > 0:
+                if hits_count == total_voters:
+                    alias_narrator_full_hits[narrador_alias] += 1
+                elif hits_count == 0:
+                    alias_narrator_full_misses[narrador_alias] += 1
+
     avg_rounds = total_rounds_all / num_logs if num_logs else 0
 
     global_hits = sum(alias_vote_hits.values())
@@ -120,6 +140,8 @@ def analyze(logs: List[Dict[str, Any]]) -> Dict[str, Any]:
             "hit_rate": round(hit_rate, 4),
             "avg_points_per_round": round(avg_pts, 4),
             "avg_points_as_narrator": round(avg_pts_as_narrator, 4),
+            "narrator_zero_full_hits": alias_narrator_full_hits.get(alias, 0),
+            "narrator_zero_full_misses": alias_narrator_full_misses.get(alias, 0),
         }
 
     return {
@@ -172,6 +194,8 @@ def print_results(results: Dict[str, Any], log_names: List[str]) -> None:
         print(f"    Hit rate          : {stats['hit_rate'] * 100:.1f}%")
         print(f"    Media pts/rodada  : {stats['avg_points_per_round']:.2f}")
         print(f"    Media pts/narrador: {stats['avg_points_as_narrator']:.2f}")
+        print(f"    Zero pts (full acerto): {stats['narrator_zero_full_hits']}")
+        print(f"    Zero pts (full erro)  : {stats['narrator_zero_full_misses']}")
         print()
 
     print(SEP)
