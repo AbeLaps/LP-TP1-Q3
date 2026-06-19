@@ -5,8 +5,9 @@ venv/
 logs/
 logs_tournament/
 *.log
-*.gguf
+
 .env
 .DS_Store
 .vscode/
 results/
+*.gguf

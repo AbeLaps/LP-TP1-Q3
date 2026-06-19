@@ -118,12 +118,12 @@ async def main() -> None:
             ]
         else:
             agent_specs = [
-                ("BASE_llm_agent.py", args.base_port, "BASE_LLMAgent", "strategic"),
+                ("BASE_llm_agent.py", args.base_port, "BASE_LLMAgent_1", "strategic"),
                 ("HALF_heuristics_llm_agent.py", args.base_port + 1, "HALF_heuristics_agent", "strategic"),
                 ("FULL_LLM_v1_llm_agent.py", args.base_port + 2, "FULL_LLM_v1_agent", "strategic"),
-                ("random_agent.py", args.base_port + 3, "RandomAgent", "random"),
-                ("random_agent.py", args.base_port + 4, "RandomAgent", "random"),
-                ("random_agent.py", args.base_port + 5, "RandomAgent", "random"),
+                ("BASE_llm_agent.py", args.base_port + 3, "BASE_LLMAgent_2", "strategic"),
+                ("BASE_llm_agent.py", args.base_port + 4, "BASE_LLMAgent_3", "strategic"),
+                ("BASE_llm_agent.py", args.base_port + 5, "BASE_LLMAgent_4", "strategic"),
             ]
 
         used_ports = {llm_port, gm_port}
