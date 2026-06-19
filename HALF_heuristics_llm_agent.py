@@ -19,7 +19,7 @@ import argparse
 import re
 from typing import Any, Dict, List
 
-from base_agent import BaseAgent
+from base_agent import BaseAgent, STOPWORDS
 from fasta2a import A2AApp, tool
 
 app = A2AApp(name="LLMAgent")
@@ -147,8 +147,9 @@ class LLMAgent(BaseAgent):
         for idx, option in enumerate(options):
             if idx == my_idx:
                 continue
-            title_words = self._normalize_words(option.get("title", ""))
-            score = len(clue_words.intersection(title_words))
+            first_300 = " ".join(option.get("lyrics", "").split()[:300])
+            lyrics_words = self._normalize_words(first_300) - STOPWORDS
+            score = len(clue_words.intersection(lyrics_words))
             scored.append((score, idx))
 
         scored.sort(reverse=True)
@@ -173,8 +174,8 @@ class LLMAgent(BaseAgent):
             "As músicas estão numeradas a partir de 1, utilize esses números para escolher."
             f"Dica:\n{clean_clue}\n\n"
             f"Lista de músicas com suas letras: {options_str}\n\n"
-            "Utilize o seu voto com confiabilidade, verifique as letras de músicas que possuem palavras em comum "
-            "com a dica e utilize seu voto de forma criativa."
+            "Utilize o seu voto com confiabilidade, verifique as letras de músicas que possuem palavras em comum isso pode ser um bom indício "
+            "Utilize seu voto sem com criatividade para tentar acertar a música."
             "Responda exatamente da seguinte forma sem qualquer outro marcador markdown ou explicação a mais:"
             "response: [número da música escolhida]"
         )
