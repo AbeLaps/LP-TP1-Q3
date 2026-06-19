@@ -75,14 +75,15 @@ class LLMAgent(BaseAgent):
             "Você deve maximixar a qualidade da dica para que a música possa ser adivinhada apenas pela dica"
             "Evite ao máximo utilizar qualquer palavra da letra ou trecho exato da música"
             f"Use no maximo {max_words} palavras.\n"
-            "Você deve gerar uma explicação para a dica que vai dar como resposta e apenas no final escrever a"
+            "A dica não precisa e é recomendado não ser uma frase correta, é ideal que seja apenas palavras chaves soltas"
+            "Você deve gerar uma explicação curta para a dica que vai dar como resposta e apenas no final escrever a"
             " dica real com o indicador Dica: <<<Sua dica>>> \n\n"
             f"Letra:\n{short_lyrics}\n\n"
         )
 
         raw = await self.llm_generate(
             prompt,
-            max_tokens=400,
+            max_tokens=2000,
             temperature=0.3,
             stop=["\n\n", "\nResposta:", "\nAnswer:", "###"],
         )
@@ -126,37 +127,44 @@ class LLMAgent(BaseAgent):
 
     @tool()
     async def vote(self, clue: str, options: List[Dict[str, Any]], my_chosen_card: Dict[str, Any]) -> Dict[str, Any]:
-        # Estratégia simples:
-        # tenta votar nas duas opções com maior interesecao entre dica e título.
-        # Se n der certo, vota nas duas primeiras que não forem a própria carta.
-        my_idx = next(i for i, option in enumerate(options) if option["id"] == my_chosen_card["id"])
+        
         clue_words = self._normalize_words(clue)
+        clean_clue = [x for x in clue_words]
 
-        scored: List[tuple[int, int]] = []
-        for idx, option in enumerate(options):
-            if idx == my_idx:
-                continue
-            title_words = self._normalize_words(option.get("title", ""))
-            score = len(clue_words.intersection(title_words))
-            scored.append((score, idx))
+        # retirar a chosen card das opções
+        options = [n for n in options if n['id'] != my_chosen_card.get('id')] 
+        options_str = "\n".join(f"{idx+1}. {option.get('title', '')}: {option.get('lyrics', '')}" for idx, option in enumerate(options))
 
-        scored.sort(reverse=True)
+        prompt = (
+            "Você é um jogador em um jogo de associação entre dicas e músicas\n"
+            "Você receberá um dica e 5 cartas que contém títulos e letras de músicas"
+            "você deve verificar cada música e escolher as duas que são mais prováveis de gerar essa dica"
+            "As músicas estão no formato título:letra e estão numeradas de 1 a 5, utilize esses números para" 
+            "escolher as cartas."
+            f"Dica:\n{clean_clue}\n\n"
+            f"Lista de músicas com suas letras: {options_str}\n\n"
+            "Responda exatamente da seguinte forma sem qualquer outro marcador markdown ou explicação a mais:"
+            "response: [número da primeira escolha, número da segunda escolha]"
+        )
 
-        votes: List[int] = []
-        for _, idx in scored:
-            if idx != my_idx and idx not in votes:
-                votes.append(idx)
-            if len(votes) == 2:
-                break
+        raw = await self.llm_generate(
+            prompt,
+            max_tokens=200,
+            temperature=0.3,
+            stop=["\n\n", "\nResposta:", "\nAnswer:", "###"],
+        )
 
-        if len(votes) < 2:
-            for idx in range(len(options)):
-                if idx != my_idx and idx not in votes:
-                    votes.append(idx)
-                if len(votes) == 2:
+        clean_votes = sanitize_votes(raw)
+
+        # fallback com voto aleatório
+        if len(clean_votes) < 2:
+            for _ in range(len(options)-1):
+                if len(clean_votes) >= 2:
                     break
+                else:
+                    clean_votes.append(random.randint(0, len(options)))
 
-        return {"votes": votes[:2]}
+        return {"votes": clean_votes[:2]}
 
     def _extract_clue_from_response(self, raw: str) -> str:
         """Extrai somente o texto após o indicador 'Dica:' na resposta da LLM.
@@ -216,6 +224,29 @@ class LLMAgent(BaseAgent):
             if token:
                 cleaned.append(token)
         return set(cleaned)
+
+
+def sanitize_votes(raw: str, n_options: int = 5) -> List[int]:
+    """Extrai índices de voto (base 0) da resposta da LLM.
+
+    Formato esperado: response: [1, 3]  (base 1)
+    Retorna lista de índices base-0 sem duplicatas, ou lista vazia se não
+    for possível parsear — o fallback heurístico em vote() cobre esse caso.
+    """
+    match = re.search(r'response\s*:\s*\[([^\]]+)\]', raw, re.IGNORECASE)
+    if not match:
+        match = re.search(r'\[([^\]]+)\]', raw)
+    if not match:
+        return []
+
+    indices: List[int] = []
+    for part in match.group(1).split(','):
+        num = re.search(r'\d+', part)
+        if num:
+            idx = int(num.group()) - 1
+            if 0 <= idx < n_options and idx not in indices:
+                indices.append(idx)
+    return indices
 
 
 def main() -> None:

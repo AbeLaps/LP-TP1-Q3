@@ -34,7 +34,7 @@ STOPWORDS = {
 
 
 class BaseAgent:
-    def __init__(self, name: str, llm_url: str = "http://127.0.0.1:9000", request_timeout: float = 60.0):
+    def __init__(self, name: str, llm_url: str = "http://127.0.0.1:9000", request_timeout: float = 300.0):
         self.name = name
         self.llm_url = llm_url.rstrip("/")
         self.request_timeout = request_timeout
