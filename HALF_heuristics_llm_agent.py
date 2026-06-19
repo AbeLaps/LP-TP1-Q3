@@ -137,12 +137,13 @@ class LLMAgent(BaseAgent):
         prompt = (
             "Você é um jogador em um jogo de associação entre dicas e músicas\n"
             "Você receberá uma dica e 5 cartas que contém títulos e letras de músicas"
-            "você deve verificar cada música e escolher a música mais provável de ter originado essa dica"
+            "você deve verificar cada música e escolher a música mais provável de corresponder a dica"
             "As músicas estão no formato título:letra e estão numeradas de 0 a 4, utilize esses números para"
             "escolher as cartas."
             f"Dica:\n{clean_clue}\n\n"
             f"Lista de músicas com suas letras: {options_str}\n\n"
-            "Utilize o seu voto de forma criativa porém com confiabilidade"
+            "Utilize o seu voto com confiabilidade, verifique as letras de músicas que possuem palavras em comum "
+            "com a dica isso pode ser um forte indicativo de resposta correta"
             "Responda exatamente da seguinte forma sem qualquer outro marcador markdown ou explicação a mais:"
             "response: [número da música escolhida]"
         )
@@ -150,7 +151,7 @@ class LLMAgent(BaseAgent):
         raw = await self.llm_generate(
             prompt,
             max_tokens=200,
-            temperature=0.3,
+            temperature=0.1,
             stop=["\n\n", "\nResposta:", "\nAnswer:", "###"],
         )
 
