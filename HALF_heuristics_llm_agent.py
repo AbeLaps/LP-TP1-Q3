@@ -106,17 +106,18 @@ class LLMAgent(BaseAgent):
         prompt = (
             "Você é um jogador em um jogo de associação entre dicas e músicas\n"
             "Você receberá uma dica e uma lista de músicas contendo titulo:letra"
-            "Ordene essa lista das músicas de forma decrescente partindo da música que tem mais chance de gerar essa dica"
+            "escolha a música mais compatível com dica"
             "A lista deve utilizar os títulos como forma de identificação"
-            "Você deve responder exatamente da seguinte forma, contendo apenas e exatamente uma lista nesse formato sem qualquer outro marcador markdown:"
-            "response: [lista de títulos ordenados]"
+            "Justifique as 2 primeiras posições e apenas no final da sua resposta coloque a lista"
+            "Você deve responder exatamente da seguinte forma, contendo apenas e exatamente uma lista nesse formato sem qualquer outro marcador markdown exceto pela explicação:"
+            "response: [lista de títulos ordenados de acordo com a compatibilidade com a dica]"
             f"Dica:\n{clean_clue}\n\n"
             f"Lista de músicas com suas letras: {self.hand}"
         )
 
         raw = await self.llm_generate(
             prompt,
-            max_tokens=200,
+            max_tokens=2000,
             temperature=0.3,
             stop=["\n\n", "\nResposta:", "\nAnswer:", "###"],
         )
@@ -130,20 +131,41 @@ class LLMAgent(BaseAgent):
         clue_words = self._normalize_words(clue)
         clean_clue = [x for x in clue_words]
 
-        # retirar a chosen card das opções para o prompt da LLM
-        other_options = [n for n in options if n['id'] != my_chosen_card.get('id')]
-        options_str = "\n".join(f"{idx+1}. {option.get('title', '')}: {option.get('lyrics', '')}" for idx, option in enumerate(other_options))
+        my_idx = next((i for i, opt in enumerate(options) if opt["id"] == my_chosen_card["id"]), -1)
+
+        # Heurística roda primeiro para determinar sua escolha
+        scored: List[tuple[int, int]] = []
+        for idx, option in enumerate(options):
+            if idx == my_idx:
+                continue
+            title_words = self._normalize_words(option.get("title", ""))
+            score = len(clue_words.intersection(title_words))
+            scored.append((score, idx))
+
+        scored.sort(reverse=True)
+
+        heuristic_pick: int | None = scored[0][1] if scored else None
+
+        # LLM recebe opções sem my_chosen_card e sem a carta da heurística
+        excluded_ids = {my_chosen_card.get("id")}
+        if heuristic_pick is not None:
+            excluded_ids.add(options[heuristic_pick]["id"])
+
+        llm_options = [opt for opt in options if opt["id"] not in excluded_ids]
+        options_str = "\n".join(
+            f"{idx+1}. {option.get('title', '')}: {option.get('lyrics', '')}"
+            for idx, option in enumerate(llm_options)
+        )
 
         prompt = (
             "Você é um jogador em um jogo de associação entre dicas e músicas\n"
-            "Você receberá uma dica e 5 cartas que contém títulos e letras de músicas"
+            "Você receberá uma dica e uma lista de cartas que contém títulos e letras de músicas"
             "você deve verificar cada música e escolher a música mais provável de corresponder a dica"
-            "As músicas estão no formato título:letra e estão numeradas de 0 a 4, utilize esses números para"
-            "escolher as cartas."
+            "As músicas estão numeradas a partir de 1, utilize esses números para escolher."
             f"Dica:\n{clean_clue}\n\n"
             f"Lista de músicas com suas letras: {options_str}\n\n"
             "Utilize o seu voto com confiabilidade, verifique as letras de músicas que possuem palavras em comum "
-            "com a dica isso pode ser um forte indicativo de resposta correta"
+            "com a dica e utilize seu voto de forma criativa."
             "Responda exatamente da seguinte forma sem qualquer outro marcador markdown ou explicação a mais:"
             "response: [número da música escolhida]"
         )
@@ -155,34 +177,17 @@ class LLMAgent(BaseAgent):
             stop=["\n\n", "\nResposta:", "\nAnswer:", "###"],
         )
 
-        # índices da LLM são relativos a other_options; mapeia de volta para options original
-        other_to_orig = {fi: next(oi for oi, opt in enumerate(options) if opt['id'] == card['id'])
-                         for fi, card in enumerate(other_options)}
-        llm_votes_filtered = self.sanitize_votes(raw, n_options=len(other_options))
-        clean_votes = [other_to_orig[i] for i in llm_votes_filtered if i in other_to_orig]
+        # mapeia índice de volta para options original
+        llm_to_orig = {fi: next(oi for oi, opt in enumerate(options) if opt["id"] == card["id"])
+                       for fi, card in enumerate(llm_options)}
+        llm_votes_filtered = self.sanitize_votes(raw, n_options=len(llm_options))
+        llm_clean_votes = [llm_to_orig[i] for i in llm_votes_filtered if i in llm_to_orig]
 
-        # Heuristica sobre a lista original, excluindo a própria carta
-        my_idx = next((i for i, opt in enumerate(options) if opt["id"] == my_chosen_card["id"]), -1)
-
-        scored: List[tuple[int, int]] = []
-        for idx, option in enumerate(options):
-            if idx == my_idx:
-                continue
-            title_words = self._normalize_words(option.get("title", ""))
-            score = len(clue_words.intersection(title_words))
-            scored.append((score, idx))
-
-        scored.sort(reverse=True)
-
-        heuristic_votes: List[int] = []
-        for _, idx in scored:
-            if idx not in heuristic_votes:
-                heuristic_votes.append(idx)
-            if len(heuristic_votes) >= 1:
-                break
-
-        if heuristic_votes:
-            clean_votes.insert(0, heuristic_votes[0])
+        # heurística tem prioridade; LLM preenche a segunda posição
+        clean_votes: List[int] = []
+        if heuristic_pick is not None:
+            clean_votes.append(heuristic_pick)
+        clean_votes.extend(llm_clean_votes)
 
         # fallback com voto aleatório
         if len(clean_votes) < 2:
