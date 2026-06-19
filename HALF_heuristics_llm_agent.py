@@ -182,7 +182,7 @@ class LLMAgent(BaseAgent):
 
         raw = await self.llm_generate(
             prompt,
-            max_tokens=200,
+            max_tokens=50,
             temperature=0.1,
             stop=["\n\n", "\nResposta:", "\nAnswer:", "###"],
         )
