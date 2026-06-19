@@ -174,7 +174,7 @@ class LLMAgent(BaseAgent):
             "As músicas estão numeradas a partir de 1, utilize esses números para escolher."
             f"Dica:\n{clean_clue}\n\n"
             f"Lista de músicas com suas letras: {options_str}\n\n"
-            "Utilize o seu voto com confiabilidade, verifique as letras de músicas que possuem palavras em comum isso pode ser um bom indício "
+            "Utilize o seu voto com confiabilidade, verifique as letras de músicas que possuem palavras em comum isso pode ser um indício "
             "Utilize seu voto sem com criatividade para tentar acertar a música."
             "Responda exatamente da seguinte forma sem qualquer outro marcador markdown ou explicação a mais:"
             "response: [número da música escolhida]"
@@ -183,7 +183,7 @@ class LLMAgent(BaseAgent):
         raw = await self.llm_generate(
             prompt,
             max_tokens=200,
-            temperature=0.7,
+            temperature=0.1,
             stop=["\n\n", "\nResposta:", "\nAnswer:", "###"],
         )
 
